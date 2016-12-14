@@ -35,6 +35,8 @@
 
 #include <stdarg.h>     /* va_list, va_start, va_arg, va_end */
 
+#include <limits.h>     //needed for LONG_MIN and LONG_MAX
+
 
 /*
  * --------------------------------------------------------------- defines --
@@ -189,20 +191,18 @@ int main(int argc, const char *argv[])
     //set pch to the html filename
     pch = strstr(buf, records[1]);
 
-    /*if((pch = strstr(pch, records[1]) == NULL)){
+    if((pch == NULL)){
         close(socket_fd); 
         fprintf(stderr, "%s: Could not ind \"status=\".\n", __FILE__);
         return EXIT_FAILURE;        
-    }*/
-    pch = strchr(pch, '=');
-    pch++;
-    //pch = pch + strlen(records[0]);
-    
+    }
+    //pch = strchr(pch, '=');
+    //pch++;
+    pch = pch + strlen(records[1]);     //point to filename
 
-    
+
     recv_file_name_html = (char*)malloc((strchr(pch,'\n')-pch+1));
     if(recv_file_name_html == NULL){
-        //free(recv_file_name_html);
         close(socket_fd); 
         fprintf(stderr, "%s: malloc() for html file name failed.\n", __FILE__);
         return EXIT_FAILURE;
@@ -213,14 +213,32 @@ int main(int argc, const char *argv[])
     
     //set pch to the html file length
     pch = strstr(pch, records[2]);
-    pch = strchr(pch, '=');
-    pch++;
-      
+    if((pch == NULL)){
+        close(socket_fd); 
+        free(recv_file_name_html);
+        fprintf(stderr, "%s: Could not ind \"len=\".\n", __FILE__);
+        return EXIT_FAILURE;        
+    }
+    //pch = strchr(pch, '=');
+    //pch++;
+    pch = pch + strlen(records[2]);     //point to length
+    
     html_len = strtol(pch, NULL, 10);
-        
+    if((html_len == LONG_MIN || html_len == LONG_MAX) && errno == ERANGE){
+        close(socket_fd); 
+        free(recv_file_name_html);
+        fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", __FILE__);
+        return EXIT_FAILURE;          
+    }
         
     //set pch to the html data
     pch = strchr(pch, '\n');
+    if((pch == NULL)){
+        close(socket_fd); 
+        free(recv_file_name_html);
+        fprintf(stderr, "%s: Could not ind \\n.\n", __FILE__);
+        return EXIT_FAILURE;        
+    }    
     pch++;
     
     FILE *f;
@@ -242,23 +260,38 @@ int main(int argc, const char *argv[])
     {
         free(recv_file_name_html);
         close(socket_fd); 
+        if(fclose(f)){
+            fprintf(stderr, "%s: Closing html file failed: %s.\n", __FILE__, strerror(errno));
+            return EXIT_FAILURE;    
+        }
+        
         fprintf(stderr, "%s: Writing to html file failed.\n", __FILE__);
         return EXIT_FAILURE;
     }
         
     free(recv_file_name_html);
-    fclose(f);
+    if(fclose(f)){
+        close(socket_fd); 
+        fprintf(stderr, "%s: Closing html file failed: %s.\n", __FILE__, strerror(errno));
+        return EXIT_FAILURE;    
+    }
         
     //set pch to image name
     pch = strstr(pch, records[3]);
-    pch = strchr(pch, '=');
-    pch++;
-
+    if((pch == NULL)){
+        close(socket_fd); 
+        fprintf(stderr, "%s: Could not find \"file=\".\n", __FILE__);
+        return EXIT_FAILURE;        
+    }
+    
+    //pch = strchr(pch, '=');
+    //pch++;
+    pch = pch + strlen(records[3]);     //point to image name
+    
     
     recv_img_name = malloc(sizeof(char) * (strchr(pch,'\n')-pch+1));
 
     if(!recv_img_name){
-        free(recv_img_name);
         close(socket_fd); 
         fprintf(stderr, "%s: malloc() for image name failed.\n", __FILE__);
         return EXIT_FAILURE;
@@ -270,15 +303,32 @@ int main(int argc, const char *argv[])
         
     //set pch to image length
     pch = strstr(pch, records[4]);
-    pch = strchr(pch, '=');
-    pch++;
-        
+    if((pch == NULL)){
+        free(recv_img_name);
+        close(socket_fd); 
+        fprintf(stderr, "%s: Could not find \"file=\".\n", __FILE__);
+        return EXIT_FAILURE;        
+    }
+    pch = pch + strlen(records[4]);     //point to length
+            
     img_len = strtol(pch, NULL, 10);
-
+    if((html_len == LONG_MIN || html_len == LONG_MAX) && errno == ERANGE){
+        close(socket_fd); 
+        free(recv_img_name);
+        fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", __FILE__);
+        return EXIT_FAILURE;          
+    }
+    
     //set pch to image
     pch = strchr(pch, '\n');
+    if((pch == NULL)){
+        close(socket_fd); 
+        free(recv_img_name);
+        fprintf(stderr, "%s: Could not ind \\n.\n", __FILE__);
+        return EXIT_FAILURE;        
+    }    
     pch++;
-        
+
     f = fopen(recv_img_name, "w+");
     if (f == NULL)
     {        
@@ -294,12 +344,21 @@ int main(int argc, const char *argv[])
     {
         free(recv_img_name);
         close(socket_fd); 
+        if(fclose(f)){
+            close(socket_fd); 
+            fprintf(stderr, "%s: Closing html file failed: %s.\n", __FILE__, strerror(errno));
+            return EXIT_FAILURE;    
+        }
         fprintf(stderr, "%s: Writing to png file failed.\n", __FILE__);
         return EXIT_FAILURE;
     }
         
     free(recv_img_name);
-    fclose(f);
+    if(fclose(f)){
+        close(socket_fd); 
+        fprintf(stderr, "%s: Closing html file failed: %s.\n", __FILE__, strerror(errno));
+        return EXIT_FAILURE;    
+    }
     close(socket_fd);
 
     return  0;
