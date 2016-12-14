@@ -60,11 +60,9 @@ static const char* sprogram_arg0 = NULL;
  * ------------------------------------------------------------- functions --
  */
 static void usage(FILE* stream, const char* cmnd, int exitcode);
-
 static int sendall(int s, char *buf, int *len);
 static int recv_all(int socket_fd, void *buf, size_t len, int flags);
 static void verbose_printf(int verbosity, const char *format, ...);
-
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url);
 
 /**
@@ -83,6 +81,7 @@ static int send_request(int socket_fd, const char *user, const char *message, co
 int main(int argc, const char *argv[])
 {
     int socket_fd;
+    int status;     //for checking several return values
     
     const char* server;
     const char* port;
@@ -90,16 +89,14 @@ int main(int argc, const char *argv[])
     const char* message;
     const char* image_url;
 
-    int status;     //for checking several return values
-
     sprogram_arg0 = argv[0];
 
     smc_parsecommandline(argc, argv, usage, &server, &port, &user, &message, &image_url, &verbose);
     verbose_printf(verbose, "[%s, %s(), line %d]: Using the following options: server=\"%s\" port=\"%s\", user=\"%s\", img_url=\"%s\", message=\"%s\"\n", __FILE__, __func__, __LINE__, server, port, user, image_url, message);
     
-    //gerraddrinfo() stuff START
     struct addrinfo hints;
-    struct addrinfo *servinfo, *loop_serverinfo;  // will point to the results
+    struct addrinfo *servinfo;
+    struct addrinfo *loop_serverinfo;  // will point to the results
 
     memset(&hints, 0, sizeof hints); // make sure the struct is empty
     hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
@@ -110,7 +107,6 @@ int main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }  
     
-
     //get ip or ipv6 addr
     for(loop_serverinfo = servinfo; loop_serverinfo != NULL; loop_serverinfo = loop_serverinfo->ai_next) {
         //@todo: correct verbose message
@@ -130,17 +126,14 @@ int main(int argc, const char *argv[])
 
         // connect!
 
-        if(connect(socket_fd, loop_serverinfo->ai_addr, loop_serverinfo->ai_addrlen) != -1){
-            //success message
-            //@todo: correct verbose message
-            verbose_printf(verbose, "[%s, %s(), line %d]: Connected to port %s (%s) of server %s (%s)\n", __FILE__, __func__, __LINE__, port, port, loop_serverinfo->ai_canonname,loop_serverinfo->ai_addr );
-            break; //success
+        if(connect(socket_fd, loop_serverinfo->ai_addr, loop_serverinfo->ai_addrlen) < 0){
+            verbose_printf(verbose, "%s: ", __FILE__, strerror(errno));
+            close(socket_fd);
+            continue;
         }
         
-        //could not connect
-        //@todo: correct verbose string!
-        verbose_printf(verbose, "%s: ", __FILE__, strerror(errno));
-        close(socket_fd);
+        verbose_printf(verbose, "[%s, %s(), line %d]: Connected to port %s (%s) of server %s (%s)\n", __FILE__, __func__, __LINE__, port, port, loop_serverinfo->ai_canonname,loop_serverinfo->ai_addr );
+        break; //success
     }
 
     freeaddrinfo(servinfo); // free the linked-list, no longer needed
@@ -160,12 +153,11 @@ int main(int argc, const char *argv[])
    
     //shutdown writing
     if(shutdown(socket_fd, 1)){
-        fprintf(stderr, "%s: Error when shutting down socket for writing\n", __FILE__);
+        fprintf(stderr, "%s: Error when shutting down socket for writing: %s\n", __FILE__, strerror(errno));
         close(socket_fd);
         return EXIT_FAILURE;
     }
     verbose_printf(verbose, "[%s, %s(), line %d]: Closed write part of socket\n", __FILE__, __func__, __LINE__);
-
     
     //@todo: was soll getan werden wenn der buffer zu klein ist??? das muss noch geaendert werden
     char buf[10000];
@@ -181,7 +173,7 @@ int main(int argc, const char *argv[])
     
     long html_len = 0, img_len = 0;
     
-    const char *records[6] = { "status=", "file=", "len=", "file=", "len=" };
+    const char *records[5] = { "status=", "file=", "len=", "file=", "len=" };
     
     char * pch = NULL;
 
@@ -190,20 +182,31 @@ int main(int argc, const char *argv[])
     //set pch to the status
     //pch = strstr(buf, records[0]);  
     //html_status = strtol(pch, NULL, 10);
-      
+    
+    //use this if status= is used instead of the one beneath
+    //pch = strstr(pch, records[1]);
+    
     //set pch to the html filename
-    pch = strstr(pch, records[1]);
+    pch = strstr(buf, records[1]);
+
+    /*if((pch = strstr(pch, records[1]) == NULL)){
+        close(socket_fd); 
+        fprintf(stderr, "%s: Could not ind \"status=\".\n", __FILE__);
+        return EXIT_FAILURE;        
+    }*/
     pch = strchr(pch, '=');
     pch++;
+    //pch = pch + strlen(records[0]);
     
+
     
     recv_file_name_html = (char*)malloc((strchr(pch,'\n')-pch+1));
-    if(!recv_file_name_html){
-        free(recv_file_name_html);
+    if(recv_file_name_html == NULL){
+        //free(recv_file_name_html);
         close(socket_fd); 
         fprintf(stderr, "%s: malloc() for html file name failed.\n", __FILE__);
         return EXIT_FAILURE;
-    }
+    }   
     
     strncpy(recv_file_name_html, pch, (strchr(pch,'\n')-pch+1));
     recv_file_name_html[(strchr(pch,'\n')-pch)] = '\0'; //do we need this?
