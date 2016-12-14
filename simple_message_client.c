@@ -1,12 +1,8 @@
 /**
  * @file simple_message_client.c
- * Verteilte Systeme
- * TCP/IP Uebung
  * 
  * Client
  *
- * @author Juergen Schoener <ic16b049@technikum-wien.at>
- * @author Juergen Spandl <ic16b029@technikum-wien.at>
  * @date 2016/12/10
  *
  * @version 1
@@ -151,7 +147,6 @@ int main(int argc, const char *argv[])
 
     if(loop_serverinfo == NULL){
         fprintf(stderr, "%s: Could not connect\n", __FILE__);
-        close(socket_fd);
         return EXIT_FAILURE;
         //freeaddrinfo(servinfo); // free the linked-list, is it necessary?
     }
@@ -179,16 +174,22 @@ int main(int argc, const char *argv[])
     recv_all(socket_fd, buf, 10000 - 1, 0);    
     
     char *recv_file_name_html = NULL, *recv_img_name = NULL;
-    long html_status = 0, html_len = 0, img_len = 0;
+    
+    //dont know what the status is for
+    //uncomment this if needed
+    //long html_status = 0, 
+    
+    long html_len = 0, img_len = 0;
     
     const char *records[6] = { "status=", "file=", "len=", "file=", "len=" };
     
-    
-    char * pch;
+    char * pch = NULL;
 
+    //dont know what the status is for
+    //uncomment this if needed
     //set pch to the status
-    pch = strstr(buf, records[0]);  
-    html_status = strtol(pch, NULL, 10);
+    //pch = strstr(buf, records[0]);  
+    //html_status = strtol(pch, NULL, 10);
       
     //set pch to the html filename
     pch = strstr(pch, records[1]);
@@ -312,20 +313,18 @@ static void usage(FILE *stream, const char *cmnd, int exitcode) {
         -m, --message <message> message to be added to the bulletin board\n\
         -v, --verbose           verbose output\n\
         -h, --help\n", cmnd) < 0){
-                
-        //PRERROR("can't print to stdout");
+        
+        fprintf(stderr, "%s: Writing to stdout failed.\n", __FILE__);
     }
     exit(exitcode);
 }
 
 
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url){
-    int len;
-    char* conc_message;
-    //printf("%d\n", len);
-
+    int len;            //length of the message to send
+    char* conc_message; //message to send
     
-    /* calculate message size */
+    // calculate message size
     if (img_url) {
 	//with img_url
         len = strlen("user=") + strlen(user) + strlen("\nimg=") + strlen(img_url) + strlen("\n") + strlen(message);
@@ -337,19 +336,27 @@ static int send_request(int socket_fd, const char *user, const char *message, co
     conc_message = (char*) malloc(len+1);
     
     if (conc_message == NULL) {
-	//printErrorMessage("client: malloc message size");
         //free(conc_message);
+        fprintf(stderr, "%s: malloc() for message to send failed.\n", __FILE__);
 	return EXIT_FAILURE;
     }
     
-    /* assemble message */
+    //build message
     if (img_url == NULL) {
-	/* without image */
-	sprintf(conc_message, "user=%s\n%s", user, message);
+	//no image
+	if(sprintf(conc_message, "user=%s\n%s", user, message) < 0){
+            fprintf(stderr, "%s: Writing message failed.\n", __FILE__);
+            free(conc_message);
+            return EXIT_FAILURE;
+        }
     } 
     else {
-	/* with image */
-	sprintf(conc_message, "user=%s\nimg=%s\n%s", user, img_url, message);
+	// with image
+	if(sprintf(conc_message, "user=%s\nimg=%s\n%s", user, img_url, message) < 0){
+            fprintf(stderr, "%s: Writing message failed.\n", __FILE__);
+            free(conc_message);
+            return EXIT_FAILURE;
+        }
     }
 	
     verbose_printf(verbose, "[%s, %s(), line %d]: Going to send the following message consisting of %d bytes ...\n%s\n", __FILE__, __func__, __LINE__, len, conc_message);
@@ -357,7 +364,8 @@ static int send_request(int socket_fd, const char *user, const char *message, co
     if (sendall(socket_fd, conc_message, &len) == -1) {
         //printf("We only sent %d bytes because of the error!\n", len);
         free(conc_message);
-        return -1;
+        return EXIT_FAILURE;
+        //return -1;
     }
     //@todo: correct verbose output
     verbose_printf(verbose, "[%s, %s(), line %d]: Sent request user=\"%s\", img_url=\"%s\", message=\"%s\" to server %s (%s)\n", __FILE__, __func__, __LINE__, user, img_url, message, "HOSTNAME", "IPIPIPIPIP");

@@ -1,10 +1,5 @@
 ##
 ## @file Makefile
-## Verteilte Systeme
-## TCP/IP Uebung
-##
-## @author Juergen Schoener <ic16b049@technikum-wien.at>
-## @author Juergen Spandl <ic16b029@technikum-wien.at>
 ## @date 2016/12/10
 ##
 ## @version $Revision: 1 $
