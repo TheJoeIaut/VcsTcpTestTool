@@ -56,7 +56,7 @@ static void usage(FILE* stream, const char* cmnd, int exitcode);
 static int sendall(int s, char *buf, int *len);
 static void verbose_printf(int verbosity, const char *format, ...);
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url);
-static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len);
+static int write_file(char* recv_file_name, FILE *recv_fd, int file_len);
 
 /**
  * \brief This is the main entry point for any C program.
@@ -71,7 +71,7 @@ static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len);
 int main(int argc, const char *argv[])
 {
     int socket_fd;
-    int status;     //for checking several return values
+    int state;     //for checking several return values
     
     const char* server;
     const char* port;
@@ -92,8 +92,8 @@ int main(int argc, const char *argv[])
     hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
     
-    if ((status = getaddrinfo(server, port, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "%s: Could not obtain address information: %s\n", sprogram_arg0, gai_strerror(status));
+    if ((state = getaddrinfo(server, port, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "%s: Could not obtain address information: %s\n", sprogram_arg0, gai_strerror(state));
         return EXIT_FAILURE;
     }  
     
@@ -109,7 +109,7 @@ int main(int argc, const char *argv[])
 	    continue;
         }
         //@todo: correct verbose message
-        verbose_printf(verbose, "[%s, %s(), line %d]: Created IPvX XXXSOCK_STREAMXXX socket\n", __FILE__, __func__, __LINE__);
+        verbose_printf(verbose, "[%s, %s(), line %d]: Created IPv%d XXXSOCK_STREAMXXX socket\n", __FILE__, __func__, __LINE__, loop_serverinfo->ai_addr);
 
         if(connect(socket_fd, loop_serverinfo->ai_addr, loop_serverinfo->ai_addrlen) < 0){
             verbose_printf(verbose, "[%s, %s(), line %d]: %s\n", __FILE__, __func__, __LINE__,strerror(errno));
@@ -135,6 +135,9 @@ int main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
    
+       //@todo: correct verbose output
+    verbose_printf(verbose, "[%s, %s(), line %d]: Sent request user=\"%s\", img_url=\"%s\", message=\"%s\" \n", __FILE__, __func__, __LINE__, user, image_url, message);
+   
     //shutdown writing, 1 -> further sends are disallowed
     if(shutdown(socket_fd, 1)){
         fprintf(stderr, "%s: Error when shutting down socket for writing: %s\n", sprogram_arg0, strerror(errno));
@@ -144,15 +147,14 @@ int main(int argc, const char *argv[])
     verbose_printf(verbose, "[%s, %s(), line %d]: Closed write part of socket\n", __FILE__, __func__, __LINE__);
     
     
-    
     //READ FROM HERE________________________________________________________________________________________________________
-    
 
     char* line = NULL, *pch = NULL;
-    char *recv_file_name_html = NULL;//, *recv_img_name = NULL;
+    char *recv_file_name = NULL;//, *recv_img_name = NULL;
     size_t allocated_size;
     
-    long html_len = 0;//, img_len = 0;
+    long file_len = 0;//, img_len = 0;
+    long status;
     
     FILE *recv_fd;
     recv_fd = fdopen(socket_fd,"r");
@@ -164,119 +166,154 @@ int main(int argc, const char *argv[])
     }
     
     //get status=...
+    //get len=...
     if(getline(&line, &allocated_size, recv_fd) == -1){
-        fprintf(stderr, "%s: Error when getting line for \"status\"\n", sprogram_arg0);
+        fprintf(stderr, "%s: Error when getting line for \"status=\"\n", sprogram_arg0);
         fclose(recv_fd);
-	close(socket_fd); 
-	free(line);
+        close(socket_fd); 
+        free(line);
         return EXIT_FAILURE;
     }
-    //wozu dient der status?
-    //todo: implementiere status handling
+        
+    //set pch to the file length
+    pch = strstr(line, "status=");
+    if((pch == NULL)){
+        fprintf(stderr, "%s: Could not find \"status=\".\n", sprogram_arg0);
+        fclose(recv_fd);
+        close(socket_fd); 
+        free(line);
+        return EXIT_FAILURE;        
+    }
+        
+    verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server\n", __FILE__, __func__, __LINE__, line);
+        
+    pch = pch + strlen("status=");     //point to length
+    status = strtol(pch, NULL, 10);
     
-    verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server.\n", __FILE__, __func__, __LINE__, line);
-    //todo: wellformed server response...
-    verbose_printf(verbose, "[%s, %s(), line %d]: Processed status of server response.\n", __FILE__, __func__, __LINE__);
+    if((file_len == LONG_MIN || file_len == LONG_MAX) && errno == ERANGE){
+        fprintf(stderr, "%s: Could not convert status \"status=\" to long.\n", sprogram_arg0);
+        fclose(recv_fd);
+        close(socket_fd); 
+        free(line);
+        return EXIT_FAILURE;          
+    }        
     
-    
+    verbose_printf(verbose, "[%s, %s(), line %d]: Obtained status information \"%ld\" from server\n", __FILE__, __func__, __LINE__, status);
+        
     
     /////////FILE1 BEGIN
     //get file=...
+    
+    int rcvd_file_counter = 0;
+    
     while(getline(&line, &allocated_size, recv_fd) != -1){ //check for error
-    
-    /*if(getline(&line, &allocated_size, recv_fd) == -1){
-        fprintf(stderr, "%s: Error when getting line for \"file\"\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);         
-        free(line);
-        return EXIT_FAILURE;
-    }*/
-    
-    //set pch to the html filename
-    pch = strstr(line, "file=");
+            
+        //set pch to the filename
+        pch = strstr(line, "file=");
 
-    if((pch == NULL)){
-        fprintf(stderr, "%s: Could not find \"file=\".\n", sprogram_arg0);        
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        return EXIT_FAILURE;        
-    }
-    verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server\n", __FILE__, __func__, __LINE__, line);
-    
-    
-    pch = pch + strlen("file=");     //point to filename
+        if((pch == NULL)){
+            fprintf(stderr, "%s: Could not find \"file=\".\n", sprogram_arg0);        
+            fclose(recv_fd);
+            close(socket_fd);
+            free(line);
+            return EXIT_FAILURE;        
+        }
+        verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server\n", __FILE__, __func__, __LINE__, line);
+        
+        
+        pch = pch + strlen("file=");     //point to filename
 
-    recv_file_name_html = (char*)malloc((strchr(pch,'\n')-pch+1));
-    if(recv_file_name_html == NULL){
-        fprintf(stderr, "%s: malloc() for html file name failed.\n", sprogram_arg0);        
-        fclose(recv_fd);
-	close(socket_fd); 
-        free(line);
-        return EXIT_FAILURE;
-    }   
-    
-    strncpy(recv_file_name_html, pch, (strchr(pch,'\n')-pch+1));
-    recv_file_name_html[(strchr(pch,'\n')-pch)] = '\0'; //do we need this?    
-    
-    verbose_printf(verbose, "[%s, %s(), line %d]: Wellformed server response \"%s\".\n", __FILE__, __func__, __LINE__, recv_file_name_html);
-    
-    //get len=...
-    if(getline(&line, &allocated_size, recv_fd) == -1){
-        fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd); 
-        free(line);
-        free(recv_file_name_html);
-        return EXIT_FAILURE;
-    }
-    
-    //set pch to the html file length
-    pch = strstr(line, "len=");
-    if((pch == NULL)){
-        fprintf(stderr, "%s: Could not find \"len=\".\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd); 
-        free(line);
-        free(recv_file_name_html);
-        return EXIT_FAILURE;        
-    }
-    
-    verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server\n", __FILE__, __func__, __LINE__, line);
-    
+        recv_file_name = (char*)malloc((strchr(pch,'\n')-pch+1));
+        if(recv_file_name == NULL){
+            fprintf(stderr, "%s: malloc() for file name failed.\n", sprogram_arg0);        
+            fclose(recv_fd);
+            close(socket_fd); 
+            free(line);
+            return EXIT_FAILURE;
+        }   
+        
+        strncpy(recv_file_name, pch, (strchr(pch,'\n')-pch+1));
+        recv_file_name[(strchr(pch,'\n')-pch)] = '\0'; //do we need this?    
+        
+        verbose_printf(verbose, "[%s, %s(), line %d]: Wellformed server response \"%s\".\n", __FILE__, __func__, __LINE__, recv_file_name);
+        
+        //get len=...
+        if(getline(&line, &allocated_size, recv_fd) == -1){
+            fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
+            fclose(recv_fd);
+            close(socket_fd); 
+            free(line);
+            free(recv_file_name);
+            return EXIT_FAILURE;
+        }
+        
+        //set pch to the file length
+        pch = strstr(line, "len=");
+        if((pch == NULL)){
+            fprintf(stderr, "%s: Could not find \"len=\".\n", sprogram_arg0);
+            fclose(recv_fd);
+            close(socket_fd); 
+            free(line);
+            free(recv_file_name);
+            return EXIT_FAILURE;        
+        }
+        
+        verbose_printf(verbose, "[%s, %s(), line %d]: Obtained response \"%s\" from server\n", __FILE__, __func__, __LINE__, line);
+        
 
-    pch = pch + strlen("len=");     //point to length
-    
-    html_len = strtol(pch, NULL, 10);
-    if((html_len == LONG_MIN || html_len == LONG_MAX) && errno == ERANGE){
-        fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        free(recv_file_name_html);
-        return EXIT_FAILURE;          
-    }    
-    
-    verbose_printf(verbose, "[%s, %s(), line %d]: Wellformed server response \"%d\".\n", __FILE__, __func__, __LINE__, html_len);
-    
-    //todo: error handling
-    if(write_file(recv_file_name_html, recv_fd, html_len) == EXIT_FAILURE){
-        fprintf(stderr, "%s: Could not write html file.\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        free(recv_file_name_html);
-        return EXIT_FAILURE;  
-    }
-    free(recv_file_name_html);
-    
+        pch = pch + strlen("len=");     //point to length
+        
+        file_len = strtol(pch, NULL, 10);
+        if((file_len == LONG_MIN || file_len == LONG_MAX) && errno == ERANGE){
+            fprintf(stderr, "%s: Could not convert \"len=\" to long.\n", sprogram_arg0);
+            fclose(recv_fd);
+            close(socket_fd);
+            free(line);
+            free(recv_file_name);
+            return EXIT_FAILURE;          
+        }    
+        
+        verbose_printf(verbose, "[%s, %s(), line %d]: Wellformed server response \"%d\".\n", __FILE__, __func__, __LINE__, file_len);
+        
+        //todo: error handling
+        if(write_file(recv_file_name, recv_fd, file_len) == EXIT_FAILURE){
+            fprintf(stderr, "%s: Could not write file.\n", sprogram_arg0);
+            fclose(recv_fd);
+            close(socket_fd);
+            free(line);
+            free(recv_file_name);
+            return EXIT_FAILURE;  
+        }
+        free(recv_file_name);
+        
+        if(rcvd_file_counter > 0){
+            verbose_printf(verbose, "[%s, %s(), line %d]:  Processed file %d (optional) in server response\n", __FILE__, __func__, __LINE__, rcvd_file_counter);
+        }else{
+            if(rcvd_file_counter == 0){
+                verbose_printf(verbose, "[%s, %s(), line %d]:  Processed file %d (mandatory) in server response\n", __FILE__, __func__, __LINE__, rcvd_file_counter);                
+            }
+        }
+
+        if(rcvd_file_counter == (INT_MAX)){
+            fprintf(stderr, "%s: Received too many files\n", sprogram_arg0);
+            fclose(recv_fd);
+            close(socket_fd);
+            free(line);
+            return EXIT_FAILURE;          
+        }
+        
+        rcvd_file_counter++;
     }
     fclose(recv_fd);
+    verbose_printf(verbose, "[%s, %s(), line %d]: Closed filedescriptor\n", __FILE__, __func__, __LINE__);
+    
     close(socket_fd);
+    verbose_printf(verbose, "[%s, %s(), line %d]: Closed socket\n", __FILE__, __func__, __LINE__, recv_file_name);
+    
     free(line);
     //free(recv_img_name);
 
-    return  0;
+    return  EXIT_SUCCESS;
 }
 
 /**
@@ -372,8 +409,6 @@ static int send_request(int socket_fd, const char *user, const char *message, co
         free(conc_message);
         return EXIT_FAILURE;
     }
-    //@todo: correct verbose output
-    verbose_printf(verbose, "[%s, %s(), line %d]: Sent request user=\"%s\", img_url=\"%s\", message=\"%s\" to server %s (%s)\n", __FILE__, __func__, __LINE__, user, img_url, message, "HOSTNAME", "IPIPIPIPIP");
     
     free(conc_message);
     
@@ -420,35 +455,35 @@ static int sendall(int s, char *buf, int *len)
  *
  * \brief reads data from passed file descriptor and writes it to a file
  *
- * reads data from recv_fd in chunks and writes it to a file named recv_file_name_html
+ * reads data from recv_fd in chunks and writes it to a file named recv_file_name
  * chunkwise.
  *
- * \param recv_file_name_html name of the file to write the data to
+ * \param recv_file_name name of the file to write the data to
  * \param recv_fd file descriptor the data is read from
- * \param html_len expected length of the data to read and write
+ * \param file_len expected length of the data to read and write
  *
  * \return void
  * \retval void
  *
  */
 
-static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
+static int write_file(char* recv_file_name, FILE *recv_fd, int file_len){
     char buf[MAX_CHUNK_SIZE];
     FILE *f;
-    int chunk_number = html_len / MAX_CHUNK_SIZE;
-    int last_chunk = html_len - ( MAX_CHUNK_SIZE * chunk_number);
+    int chunk_number = file_len / MAX_CHUNK_SIZE;
+    int last_chunk = file_len - ( MAX_CHUNK_SIZE * chunk_number);
     
-    verbose_printf(verbose, "[%s, %s(), line %d]: Opening file \"%s\" for writing of %d bytes in %d chucks @%d bytes and a last remainder chunk @%d bytes ...\n", __FILE__, __func__, __LINE__, recv_file_name_html, html_len, chunk_number, MAX_CHUNK_SIZE, last_chunk);
+    verbose_printf(verbose, "[%s, %s(), line %d]: Opening file \"%s\" for writing of %d bytes in %d chucks @%d bytes and a last remainder chunk @%d bytes ...\n", __FILE__, __func__, __LINE__, recv_file_name, file_len, chunk_number, MAX_CHUNK_SIZE, last_chunk);
     
-    f = fopen(recv_file_name_html, "w+");
+    f = fopen(recv_file_name, "w+");
     
     if (f == NULL)
     {
-        fprintf(stderr, "%s: Opening html file failed.\n", sprogram_arg0);
+        fprintf(stderr, "%s: Opening file failed.\n", sprogram_arg0);
         return EXIT_FAILURE;
     }
     
-    verbose_printf(verbose, "[%s, %s(), line %d]: Opened file \"%s\" for writing of %d bytes in %d chucks @%d bytes and a last remainder chunk @%d bytes ...\n", __FILE__, __func__, __LINE__, recv_file_name_html, html_len, chunk_number, MAX_CHUNK_SIZE, last_chunk);
+    verbose_printf(verbose, "[%s, %s(), line %d]: Opened file \"%s\" for writing of %d bytes in %d chucks @%d bytes and a last remainder chunk @%d bytes ...\n", __FILE__, __func__, __LINE__, recv_file_name, file_len, chunk_number, MAX_CHUNK_SIZE, last_chunk);
     
     int bytes_written= 0;
     int bytes_read = 0;
@@ -457,31 +492,31 @@ static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
     int write_chunk_size = 0;
     
     for(int i = 0; i <= chunk_number; i++){
-    //while(bytes_read != html_len && bytes_written != html_len){
+    //while(bytes_read != file_len && bytes_written != file_len){
         
-        if(html_len - bytes_read > MAX_CHUNK_SIZE){ // >=????
+        if(file_len - bytes_read > MAX_CHUNK_SIZE){ // >=????
             read_chunk_size = MAX_CHUNK_SIZE;
         }else{
-            read_chunk_size = html_len - bytes_read;
+            read_chunk_size = file_len - bytes_read;
         }
         
         read_chunk_size = fread(buf,sizeof(char),read_chunk_size, recv_fd);
         
         if (read_chunk_size == 0) {
             fprintf(stderr, "%s: Cannot read from socket\n", sprogram_arg0);
-            /*if(fclose(f)){
-                fprintf(stderr, "%s: Closing html file failed: %s.\n", sprogram_arg0, strerror(errno));
+            if(fclose(f)){
+                fprintf(stderr, "%s: Closing file failed: %s.\n", sprogram_arg0, strerror(errno));
                 return EXIT_FAILURE;    
-            }*/
+            }
             return EXIT_FAILURE;
         }
         
         write_chunk_size = fwrite(buf, sizeof(char), read_chunk_size, f);
         
         if(read_chunk_size != write_chunk_size){
-            fprintf(stderr, "%s: Writing html file failed.\n", sprogram_arg0);
+            fprintf(stderr, "%s: Writing file failed.\n", sprogram_arg0);
             if(fclose(f)){
-                fprintf(stderr, "%s: Closing html file failed: %s.\n", sprogram_arg0, strerror(errno));
+                fprintf(stderr, "%s: Closing file failed: %s.\n", sprogram_arg0, strerror(errno));
                 return EXIT_FAILURE;    
             }
             return EXIT_FAILURE;
@@ -495,9 +530,11 @@ static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
     }
     
     if(fclose(f)){
-        fprintf(stderr, "%s: Closed file \"%s\"\n", sprogram_arg0, recv_file_name_html);
+        fprintf(stderr, "%s: Closing file \"%s\" failed \n", sprogram_arg0, recv_file_name);
         return EXIT_FAILURE;    
     }
+    verbose_printf(verbose, "[%s, %s(), line %d]: Closed file \"%s\"\n", __FILE__, __func__, __LINE__, recv_file_name);
+    
     
     return EXIT_SUCCESS;
 }
