@@ -149,10 +149,10 @@ int main(int argc, const char *argv[])
     
 
     char* line = NULL, *pch = NULL;
-    char *recv_file_name_html = NULL, *recv_img_name = NULL;
+    char *recv_file_name_html = NULL;//, *recv_img_name = NULL;
     size_t allocated_size;
     
-    long html_len = 0, img_len = 0;
+    long html_len = 0;//, img_len = 0;
     
     FILE *recv_fd;
     recv_fd = fdopen(socket_fd,"r");
@@ -179,14 +179,18 @@ int main(int argc, const char *argv[])
     verbose_printf(verbose, "[%s, %s(), line %d]: Processed status of server response.\n", __FILE__, __func__, __LINE__);
     
     
+    
+    /////////FILE1 BEGIN
     //get file=...
-    if(getline(&line, &allocated_size, recv_fd) == -1){
+    while(getline(&line, &allocated_size, recv_fd) != -1){ //check for error
+    
+    /*if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"file\"\n", sprogram_arg0);
         fclose(recv_fd);
 	close(socket_fd);         
         free(line);
         return EXIT_FAILURE;
-    }
+    }*/
     
     //set pch to the html filename
     pch = strstr(line, "file=");
@@ -262,96 +266,15 @@ int main(int argc, const char *argv[])
 	close(socket_fd);
         free(line);
         free(recv_file_name_html);
+        return EXIT_FAILURE;  
     }
     free(recv_file_name_html);
     
-    //set pointer after html file???
-    
-    //get file=...
-    
-    //set pch to the img filename
-    if(getline(&line, &allocated_size, recv_fd) == -1){
-        fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        return EXIT_FAILURE;
-    }    
-    
-    pch = strstr(line, "file=");
-
-    if((pch == NULL)){
-        fprintf(stderr, "%s: Could not find \"file=\".\n", sprogram_arg0);        
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        return EXIT_FAILURE;        
     }
-
-    pch = pch + strlen("file=");     //point to filename
-
-
-    recv_img_name = (char*)malloc((strchr(pch,'\n')-pch+1));
-    if(recv_img_name == NULL){
-        fprintf(stderr, "%s: malloc() for html file name failed.\n", sprogram_arg0);        
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        return EXIT_FAILURE;
-    }   
-    
-    strncpy(recv_img_name, pch, (strchr(pch,'\n')-pch+1));
-    recv_img_name[(strchr(pch,'\n')-pch)] = '\0'; //do we need this?    
-    
-    
-    //get len=...
-    if(getline(&line, &allocated_size, recv_fd) == -1){
-        fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);         
-        free(line);
-        free(recv_img_name);
-        return EXIT_FAILURE;
-    }        
-    
-    
-    //set pch to the html file length
-    pch = strstr(line, "len=");
-    if((pch == NULL)){
-        fprintf(stderr, "%s: Could not find \"len=\".\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd);
-        free(line);
-        free(recv_img_name);
-        return EXIT_FAILURE;        
-    }    
-    
-    pch = pch + strlen("len=");     //point to length
-    
-    img_len = strtol(pch, NULL, 10);
-    if((img_len == LONG_MIN || img_len == LONG_MAX) && errno == ERANGE){
-        fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd); 
-        free(line);
-        free(recv_img_name);
-        return EXIT_FAILURE;          
-    }   
-    
-    
-    //wieso kann hier nicht weitergelesen werden???? vllt passt &length nicht???
-    if(write_file(recv_img_name, recv_fd, img_len) == EXIT_FAILURE){
-        fprintf(stderr, "%s: Could not write image.\n", sprogram_arg0);
-        fclose(recv_fd);
-	close(socket_fd); 
-        free(line);
-        free(recv_img_name);
-    }
-
     fclose(recv_fd);
     close(socket_fd);
     free(line);
-    free(recv_img_name);
+    //free(recv_img_name);
 
     return  0;
 }
@@ -543,6 +466,16 @@ static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
         }
         
         read_chunk_size = fread(buf,sizeof(char),read_chunk_size, recv_fd);
+        
+        if (read_chunk_size == 0) {
+            fprintf(stderr, "%s: Cannot read from socket\n", sprogram_arg0);
+            /*if(fclose(f)){
+                fprintf(stderr, "%s: Closing html file failed: %s.\n", sprogram_arg0, strerror(errno));
+                return EXIT_FAILURE;    
+            }*/
+            return EXIT_FAILURE;
+        }
+        
         write_chunk_size = fwrite(buf, sizeof(char), read_chunk_size, f);
         
         if(read_chunk_size != write_chunk_size){
