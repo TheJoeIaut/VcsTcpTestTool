@@ -79,6 +79,10 @@ int main(int argc, const char *argv[])
     const char* message;
     const char* image_url;
 
+    void *ip_src;
+    int ipv;
+    char ip_dst[INET6_ADDRSTRLEN];    
+    
     sprogram_arg0 = argv[0];
 
     smc_parsecommandline(argc, argv, usage, &server, &port, &user, &message, &image_url, &verbose);
@@ -96,12 +100,27 @@ int main(int argc, const char *argv[])
         fprintf(stderr, "%s: Could not obtain address information: %s\n", sprogram_arg0, gai_strerror(state));
         return EXIT_FAILURE;
     }  
-    
-    //get ip or ipv6 addr
+        
+    //get ip or ipv6 address
     for(loop_serverinfo = servinfo; loop_serverinfo != NULL; loop_serverinfo = loop_serverinfo->ai_next) {
-        //@todo: correct verbose message
-        verbose_printf(verbose, "[%s, %s(), line %d]: Obtained IPv%d address %s, port number %s for server %s and port %s\n", __FILE__, __func__, __LINE__, loop_serverinfo->ai_protocol, loop_serverinfo->ai_addr, port, loop_serverinfo->ai_canonname, port);
-    
+
+        if (loop_serverinfo->ai_family == AF_INET) {
+            struct sockaddr_in *ipv4 = (struct sockaddr_in *)loop_serverinfo->ai_addr;
+            ip_src = &(ipv4->sin_addr);
+            ipv = 4;
+        } else {
+            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)loop_serverinfo->ai_addr;
+            ip_src = &(ipv6->sin6_addr);
+            ipv = 6;
+        }
+        /* convert the IP to a string and print it: */
+        if ((inet_ntop(loop_serverinfo->ai_family, ip_src, ip_dst, sizeof ip_dst)) == NULL) {
+            fprintf(stderr, "%s: Could not convert IP to string: %s\n", sprogram_arg0, strerror(errno));
+            return EXIT_FAILURE;
+        }
+
+        verbose_printf(verbose, "[%s, %s(), line %d]: Obtained IPv%d address %s, port number %s for server %s and port %s\n", __FILE__, __func__, __LINE__, ipv, ip_dst, port, server, port);
+        
         socket_fd = socket(loop_serverinfo->ai_family, loop_serverinfo->ai_socktype, loop_serverinfo->ai_protocol);
         
         if(socket_fd == -1){
@@ -109,7 +128,7 @@ int main(int argc, const char *argv[])
 	    continue;
         }
         //@todo: correct verbose message
-        verbose_printf(verbose, "[%s, %s(), line %d]: Created IPv%d XXXSOCK_STREAMXXX socket\n", __FILE__, __func__, __LINE__, loop_serverinfo->ai_addr);
+        verbose_printf(verbose, "[%s, %s(), line %d]: Created IPv%d socket\n", __FILE__, __func__, __LINE__, ipv);
 
         if(connect(socket_fd, loop_serverinfo->ai_addr, loop_serverinfo->ai_addrlen) < 0){
             verbose_printf(verbose, "[%s, %s(), line %d]: %s\n", __FILE__, __func__, __LINE__,strerror(errno));
@@ -117,7 +136,7 @@ int main(int argc, const char *argv[])
             continue;
         }
         
-        verbose_printf(verbose, "[%s, %s(), line %d]: Connected to port %s (%s) of server %s (%s)\n", __FILE__, __func__, __LINE__, port, port, loop_serverinfo->ai_canonname,loop_serverinfo->ai_addr );
+        verbose_printf(verbose, "[%s, %s(), line %d]: Connected to port %s (%s) of server %s (%s)\n", __FILE__, __func__, __LINE__, port, port, server, ip_dst );
         break; //success
     }
 
@@ -535,7 +554,6 @@ static int write_file(char* recv_file_name, FILE *recv_fd, int file_len){
     }
     verbose_printf(verbose, "[%s, %s(), line %d]: Closed file \"%s\"\n", __FILE__, __func__, __LINE__, recv_file_name);
     
-    
     return EXIT_SUCCESS;
 }
 
@@ -555,7 +573,6 @@ static int write_file(char* recv_file_name, FILE *recv_fd, int file_len){
  */
 static void verbose_printf(int verbosity, const char *format, ...)
 {
-
     // va_list is a special type that allows hanlding of variable
     // length parameter list
     va_list args;
@@ -567,7 +584,6 @@ static void verbose_printf(int verbosity, const char *format, ...)
         vfprintf(stdout, format, args); //todo: check for errors
     } else{
         // Do nothing
-
     }
 }
 
