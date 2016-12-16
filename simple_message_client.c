@@ -14,27 +14,17 @@
  */
 
 #include <stdio.h>
-
-
-
 #include <simple_message_client_commandline_handling.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
-
 #include <string.h> /* memset */
 #include <stdlib.h>
-
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
 #include <errno.h>
-
 #include <unistd.h>
-
 #include <stdarg.h>     /* va_list, va_start, va_arg, va_end */
-
 #include <limits.h>     //needed for LONG_MIN and LONG_MAX
 
 
@@ -53,10 +43,10 @@
 /*
  * --------------------------------------------------------------- static --
  */
-/** Controls the verbose output. */
+//indicates the verbose output
 static int verbose = 0;
 
-/** Current program arguments. */
+//programm arguments
 static const char* sprogram_arg0 = NULL;
 
 /*
@@ -66,21 +56,17 @@ static void usage(FILE* stream, const char* cmnd, int exitcode);
 static int sendall(int s, char *buf, int *len);
 static void verbose_printf(int verbosity, const char *format, ...);
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url);
-
 static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len);
 
 /**
- *
- * \brief The most minimalistic C program
- *
- * This is the main entry point for any C program.
+ * \brief This is the main entry point for any C program.
  *
  * \param argc the number of arguments
  * \param argv the arguments itselves (including the program name in argv[0])
  *
- * \return always "success"
- * \retval 0 always
- *
+ * \return returns success or error
+ * \retval EXIT_SUCCESS returned on success
+ * \retval EXIT_FAILURE returned on error
  */
 int main(int argc, const char *argv[])
 {
@@ -120,7 +106,7 @@ int main(int argc, const char *argv[])
         
         if(socket_fd == -1){
             verbose_printf(verbose, "[%s, %s(), line %d]: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
-            continue;
+	    continue;
         }
         //@todo: correct verbose message
         verbose_printf(verbose, "[%s, %s(), line %d]: Created IPvX XXXSOCK_STREAMXXX socket\n", __FILE__, __func__, __LINE__);
@@ -139,6 +125,7 @@ int main(int argc, const char *argv[])
 
     if(loop_serverinfo == NULL){
         fprintf(stderr, "%s: Could not connect\n", sprogram_arg0);
+	//socket is not open here, so do not close it
         return EXIT_FAILURE;
     }
       
@@ -148,7 +135,7 @@ int main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
    
-    //shutdown writing
+    //shutdown writing, 1 -> further sends are disallowed
     if(shutdown(socket_fd, 1)){
         fprintf(stderr, "%s: Error when shutting down socket for writing: %s\n", sprogram_arg0, strerror(errno));
         close(socket_fd);
@@ -179,8 +166,9 @@ int main(int argc, const char *argv[])
     //get status=...
     if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"status\"\n", sprogram_arg0);
-        close(socket_fd); 
-        free(line);
+        fclose(recv_fd);
+	close(socket_fd); 
+	free(line);
         return EXIT_FAILURE;
     }
     //wozu dient der status?
@@ -194,7 +182,8 @@ int main(int argc, const char *argv[])
     //get file=...
     if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"file\"\n", sprogram_arg0);
-        close(socket_fd);         
+        fclose(recv_fd);
+	close(socket_fd);         
         free(line);
         return EXIT_FAILURE;
     }
@@ -204,7 +193,8 @@ int main(int argc, const char *argv[])
 
     if((pch == NULL)){
         fprintf(stderr, "%s: Could not find \"file=\".\n", sprogram_arg0);        
-        close(socket_fd);
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         return EXIT_FAILURE;        
     }
@@ -216,7 +206,8 @@ int main(int argc, const char *argv[])
     recv_file_name_html = (char*)malloc((strchr(pch,'\n')-pch+1));
     if(recv_file_name_html == NULL){
         fprintf(stderr, "%s: malloc() for html file name failed.\n", sprogram_arg0);        
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd); 
         free(line);
         return EXIT_FAILURE;
     }   
@@ -229,7 +220,8 @@ int main(int argc, const char *argv[])
     //get len=...
     if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd); 
         free(line);
         free(recv_file_name_html);
         return EXIT_FAILURE;
@@ -239,7 +231,8 @@ int main(int argc, const char *argv[])
     pch = strstr(line, "len=");
     if((pch == NULL)){
         fprintf(stderr, "%s: Could not find \"len=\".\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd); 
         free(line);
         free(recv_file_name_html);
         return EXIT_FAILURE;        
@@ -253,7 +246,8 @@ int main(int argc, const char *argv[])
     html_len = strtol(pch, NULL, 10);
     if((html_len == LONG_MIN || html_len == LONG_MAX) && errno == ERANGE){
         fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         free(recv_file_name_html);
         return EXIT_FAILURE;          
@@ -264,7 +258,8 @@ int main(int argc, const char *argv[])
     //todo: error handling
     if(write_file(recv_file_name_html, recv_fd, html_len) == EXIT_FAILURE){
         fprintf(stderr, "%s: Could not write html file.\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         free(recv_file_name_html);
     }
@@ -277,7 +272,8 @@ int main(int argc, const char *argv[])
     //set pch to the img filename
     if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         return EXIT_FAILURE;
     }    
@@ -286,7 +282,8 @@ int main(int argc, const char *argv[])
 
     if((pch == NULL)){
         fprintf(stderr, "%s: Could not find \"file=\".\n", sprogram_arg0);        
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         return EXIT_FAILURE;        
     }
@@ -297,7 +294,8 @@ int main(int argc, const char *argv[])
     recv_img_name = (char*)malloc((strchr(pch,'\n')-pch+1));
     if(recv_img_name == NULL){
         fprintf(stderr, "%s: malloc() for html file name failed.\n", sprogram_arg0);        
-        close(socket_fd);
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         return EXIT_FAILURE;
     }   
@@ -309,7 +307,8 @@ int main(int argc, const char *argv[])
     //get len=...
     if(getline(&line, &allocated_size, recv_fd) == -1){
         fprintf(stderr, "%s: Error when getting line for \"len=\"\n", sprogram_arg0);
-        close(socket_fd);         
+        fclose(recv_fd);
+	close(socket_fd);         
         free(line);
         free(recv_img_name);
         return EXIT_FAILURE;
@@ -320,7 +319,8 @@ int main(int argc, const char *argv[])
     pch = strstr(line, "len=");
     if((pch == NULL)){
         fprintf(stderr, "%s: Could not find \"len=\".\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd);
         free(line);
         free(recv_img_name);
         return EXIT_FAILURE;        
@@ -331,7 +331,8 @@ int main(int argc, const char *argv[])
     img_len = strtol(pch, NULL, 10);
     if((img_len == LONG_MIN || img_len == LONG_MAX) && errno == ERANGE){
         fprintf(stderr, "%s: Could not convert html \"len=\" to long.\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd); 
         free(line);
         free(recv_img_name);
         return EXIT_FAILURE;          
@@ -341,17 +342,31 @@ int main(int argc, const char *argv[])
     //wieso kann hier nicht weitergelesen werden???? vllt passt &length nicht???
     if(write_file(recv_img_name, recv_fd, img_len) == EXIT_FAILURE){
         fprintf(stderr, "%s: Could not write image.\n", sprogram_arg0);
-        close(socket_fd); 
+        fclose(recv_fd);
+	close(socket_fd); 
         free(line);
         free(recv_img_name);
     }
 
+    fclose(recv_fd);
     close(socket_fd);
     free(line);
     free(recv_img_name);
 
     return  0;
 }
+
+/**
+ *
+ * \brief prints the usage messagei and terminates the process. used by smc_parsecommandline().
+ *
+ * \param stream stream to write the message to
+ * \param cmnd message to print
+ * \param exitcode indicates successfull or unsuccessfull termination
+ *
+ * \return void
+ *
+ */
 
 
 static void usage(FILE *stream, const char *cmnd, int exitcode) {
@@ -370,6 +385,24 @@ static void usage(FILE *stream, const char *cmnd, int exitcode) {
     exit(exitcode);
 }
 
+
+/**
+ *
+ * \brief prepares and sends a request
+ *
+ * assembles the message for the request depending on the passed parameters
+ * and writes it to the passed socked_fd. 
+ *
+ * \param socket_fd
+ * \param user user to send
+ * \param message message to send
+ * \param img_url the url of the image. this can be null.
+ *
+ * \return returns success or error
+ * \retval EXIT_SUCCESS returned on success
+ * \retval EXIT_FAILURE returned on error
+ *
+ */
 
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url){
     int len;            //length of the message to send
@@ -424,6 +457,24 @@ static int send_request(int socket_fd, const char *user, const char *message, co
     return 0;
 }
 
+/**
+ *
+ * \brief writes all the passed data in the buffer to passed socket
+ *
+ * writes all the data from the buffer, so that there is nothing left.
+ * this one is taken from beej's guide to network programming
+ * https://beej.us/guide/bgnet/output/html/singlepage/bgnet.html#sendall
+ *
+ * \param s socket to write the data to
+ * \param buf data that has to be written
+ * \param len number of bytes to write
+ *
+ * \return returns success or error
+ * \retval -1 returned on error
+ * \retval 0 retruned on success
+ *
+ */
+
 static int sendall(int s, char *buf, int *len)
 {
     int total = 0;        // how many bytes we've sent
@@ -441,6 +492,22 @@ static int sendall(int s, char *buf, int *len)
 
     return n==-1?-1:0; // return -1 on failure, 0 on success
 } 
+
+/**
+ *
+ * \brief reads data from passed file descriptor and writes it to a file
+ *
+ * reads data from recv_fd in chunks and writes it to a file named recv_file_name_html
+ * chunkwise.
+ *
+ * \param recv_file_name_html name of the file to write the data to
+ * \param recv_fd file descriptor the data is read from
+ * \param html_len expected length of the data to read and write
+ *
+ * \return void
+ * \retval void
+ *
+ */
 
 static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
     char buf[MAX_CHUNK_SIZE];
@@ -499,11 +566,23 @@ static int write_file(char* recv_file_name_html, FILE *recv_fd, int html_len){
         return EXIT_FAILURE;    
     }
     
-    verbose_printf(verbose, "[%s, %s(), line %d]: Copied chunk %d @%d bytes ...\n", __FILE__, __func__, __LINE__, i, write_chunk_size);
-    
     return EXIT_SUCCESS;
 }
 
+/**
+ *
+ * \brief Makes the verbose output
+ *
+ * Checks if the verbose flag is set to 1 and makes an output of so.
+ * Does nothing if it is set to 0.
+ *
+ * \param verbosity indicates if verbose flag is set
+ * \param format todo: what does it???
+ *
+ * \return void
+ * \retval void
+ *
+ */
 static void verbose_printf(int verbosity, const char *format, ...)
 {
 

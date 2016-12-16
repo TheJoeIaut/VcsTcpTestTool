@@ -12,16 +12,16 @@
 ##
 
 CC=gcc52
-#CC=gcc
-CFLAGS=-DDEBUG -Wall -pedantic -Wextra -Wstrict-prototypes -fno-common -g -O3 -std=gnu11 -o simple_message_client.o
+CFLAGS=-DDEBUG -Wall -pedantic -Werror -Wextra -Wstrict-prototypes -fno-common -g -O3 -std=gnu11 -o simple_message_client.o
 LDFLAGS = -lsimple_message_client_commandline_handling
 CP=cp
 CD=cd
 MV=mv
 GREP=grep
 DOXYGEN=doxygen
+CLIENT=simple_message_client
+SERVER=simple_message_server
 
-OBJECTS=simple_message_client.o
 
 EXCLUDE_PATTERN=footrulewidth
 
@@ -36,13 +36,16 @@ EXCLUDE_PATTERN=footrulewidth
 ## --------------------------------------------------------------- targets --
 ##
 
-all: simple_message_client
+all: $(CLIENT) $(SERVER)
 
-simple_message_client: $(OBJECTS)
-	$(CC) $(CFLGS) -o $@ $^ $(LDFLAGS)
+simple_message_client: $(CLIENT).o
+	$(CC) $(CFLAGS) $(CLIENT).o -o $(CLIENT) $(LDFLAGS) 
+	
+simple_message_server: $(SERVER).o
+	$(CC) $(CFLAGS) $(SERVER).o -o $(SERVER)	
 
 clean:
-	$(RM) *.o *~ simple_message_client
+	$(RM) *.o *~ $(CLIENT) $(SERVER)
 
 distclean: clean
 	$(RM) -r doc
