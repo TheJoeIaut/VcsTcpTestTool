@@ -12,7 +12,7 @@
 ##
 
 CC=gcc52
-CFLAGS=-DDEBUG -Wall -pedantic -Werror -Wextra -Wstrict-prototypes -fno-common -g -O3 -std=gnu11 -o simple_message_client.o
+CFLAGS=-DDEBUG -Wall -pedantic -Werror -Wextra -Wstrict-prototypes -fno-common -g -O3 -std=gnu11 
 LDFLAGS = -lsimple_message_client_commandline_handling
 CP=cp
 CD=cd
@@ -42,7 +42,7 @@ simple_message_client: $(CLIENT).o
 	$(CC) $(CFLAGS) $(CLIENT).o -o $(CLIENT) $(LDFLAGS) 
 	
 simple_message_server: $(SERVER).o
-	$(CC) $(CFLAGS) $(SERVER).o -o $(SERVER)	
+	$(CC) $(CFLAGSSERVER) $(SERVER).o -o $(SERVER)	
 
 clean:
 	$(RM) *.o *~ $(CLIENT) $(SERVER)
