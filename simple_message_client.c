@@ -57,7 +57,7 @@ static const char* sprogram_arg0 = NULL;
 /*
  * ------------------------------------------------------------- functions --
  */
-static void usage(FILE* stream, const char* cmnd, int exitcode);
+static void usage(FILE *stream, const char *name, int exit_code)
 static int sendall(int s, char *buf, int *len);
 static void verbose_printf(int verbosity, const char *format, ...);
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url);
@@ -343,15 +343,15 @@ int main(int argc, const char *argv[])
  * \brief prints the usage messagei and terminates the process. used by smc_parsecommandline().
  *
  * \param stream stream to write the message to
- * \param cmnd message to print
- * \param exitcode indicates successfull or unsuccessfull termination
+ * \param name name of programm called
+ * \param exit_code indicates successfull or unsuccessfull termination
  *
  * \return void
  *
  */
 
 
-static void usage(FILE *stream, const char *cmnd, int exitcode) {
+static void usage(FILE *stream, const char *name, int exit_code) {
     if(fprintf(stream, "usage: %s options \n\
         options:\n\
         -s, --server <server>   full qualified domain name or IP address of the server\n\
@@ -360,11 +360,11 @@ static void usage(FILE *stream, const char *cmnd, int exitcode) {
         -i, --image <URL>       URL pointing to an image of the posting user\n\
         -m, --message <message> message to be added to the bulletin board\n\
         -v, --verbose           verbose output\n\
-        -h, --help\n", cmnd) < 0){
+        -h, --help\n", name) < 0){
         
         fprintf(stderr, "%s: Writing to stdout failed.\n", sprogram_arg0);
     }
-    exit(exitcode);
+    exit(exit_code);
 }
 
 
