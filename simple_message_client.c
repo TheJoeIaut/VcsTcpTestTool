@@ -1,13 +1,18 @@
 /**
  * @file simple_message_client.c
+ * Verteilte Systeme
+ * TCP/IP Uebung
  * 
- * Client
+ * Server
  *
- * @date 2016/12/10
+ * @author Juergen Schoener <ic16b049@technikum-wien.at>
+ * @author Juergen Spandl <ic16b029@technikum-wien.at>
+ * @date 2016/12/14
  *
  * @version 1
  *
  */
+ 
 
 /*
  * -------------------------------------------------------------- includes --
@@ -17,15 +22,15 @@
 #include <simple_message_client_commandline_handling.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <string.h> /* memset */
+#include <string.h>
 #include <stdlib.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <unistd.h>
-#include <stdarg.h>     /* va_list, va_start, va_arg, va_end */
-#include <limits.h>     //needed for LONG_MIN and LONG_MAX
+#include <stdarg.h>
+#include <limits.h>
 
 
 /*
@@ -127,7 +132,7 @@ int main(int argc, const char *argv[])
             verbose_printf(verbose, "[%s, %s(), line %d]: %s\n", __FILE__, __func__, __LINE__, strerror(errno));
 	    continue;
         }
-        //@todo: correct verbose message
+
         verbose_printf(verbose, "[%s, %s(), line %d]: Created IPv%d socket\n", __FILE__, __func__, __LINE__, ipv);
 
         if(connect(socket_fd, loop_serverinfo->ai_addr, loop_serverinfo->ai_addrlen) < 0){
@@ -154,7 +159,6 @@ int main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
    
-       //@todo: correct verbose output
     verbose_printf(verbose, "[%s, %s(), line %d]: Sent request user=\"%s\", img_url=\"%s\", message=\"%s\" \n", __FILE__, __func__, __LINE__, user, image_url, message);
    
     //shutdown writing, 1 -> further sends are disallowed
@@ -166,7 +170,7 @@ int main(int argc, const char *argv[])
     verbose_printf(verbose, "[%s, %s(), line %d]: Closed write part of socket\n", __FILE__, __func__, __LINE__);
     
     
-    //READ FROM HERE________________________________________________________________________________________________________
+    //read starts here
 
     char* line = NULL, *pch = NULL;
     char *recv_file_name = NULL;//, *recv_img_name = NULL;
@@ -220,7 +224,6 @@ int main(int argc, const char *argv[])
     verbose_printf(verbose, "[%s, %s(), line %d]: Obtained status information \"%ld\" from server\n", __FILE__, __func__, __LINE__, status);
         
     
-    /////////FILE1 BEGIN
     //get file=...
     
     int rcvd_file_counter = 0;
@@ -294,7 +297,7 @@ int main(int argc, const char *argv[])
         
         verbose_printf(verbose, "[%s, %s(), line %d]: Wellformed server response \"%d\".\n", __FILE__, __func__, __LINE__, file_len);
         
-        //todo: error handling
+
         if(write_file(recv_file_name, recv_fd, file_len) == EXIT_FAILURE){
             fprintf(stderr, "%s: Could not write file.\n", sprogram_arg0);
             fclose(recv_fd);
@@ -565,7 +568,7 @@ static int write_file(char* recv_file_name, FILE *recv_fd, int file_len){
  * Does nothing if it is set to 0.
  *
  * \param verbosity indicates if verbose flag is set
- * \param format todo: what does it???
+ * \param format contains the message
  *
  * \return void
  * \retval void
@@ -580,8 +583,12 @@ static void verbose_printf(int verbosity, const char *format, ...)
 
     // If verbosity flag is on then print it
     if (verbosity){
-        fprintf(stdout, "%s ", sprogram_arg0); //todo:check for errors
-        vfprintf(stdout, format, args); //todo: check for errors
+        if(fprintf(stdout, "%s ", sprogram_arg0) < 0){
+            fprintf(stderr, "%s: Printing verbose message failed\n", sprogram_arg0);
+        }
+        if(vfprintf(stdout, format, args) < 0){
+            fprintf(stderr, "%s: Printing verbose message failed\n", sprogram_arg0);
+        }
     } else{
         // Do nothing
     }

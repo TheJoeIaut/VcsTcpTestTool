@@ -2,9 +2,12 @@
 ## @file Makefile
 ## @date 2016/12/10
 ##
+## @author Juergen Schoener <ic16b049@technikum-wien.at>
+## @author Juergen Spandl <ic16b029@technikum-wien.at>
+##
+## @date 2016/14
 ## @version $Revision: 1 $
 ##
-## @todo: change gcc version on annuminas
 ##
 ## Last Modified: $Author: spj $
 ##
@@ -13,7 +16,7 @@
 
 CC=gcc52
 CFLAGS=-DDEBUG -Wall -pedantic -Werror -Wextra -Wstrict-prototypes -fno-common -g -O3 -std=gnu11 
-LDFLAGS = -lsimple_message_client_commandline_handling
+LDFLAGS=-lsimple_message_client_commandline_handling
 CP=cp
 CD=cd
 MV=mv
