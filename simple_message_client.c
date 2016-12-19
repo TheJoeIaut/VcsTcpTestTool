@@ -57,7 +57,7 @@ static const char* sprogram_arg0 = NULL;
 /*
  * ------------------------------------------------------------- functions --
  */
-static void usage(FILE *stream, const char *name, int exit_code)
+static void usage(FILE *stream, const char *name, int exit_code);
 static int sendall(int s, char *buf, int *len);
 static void verbose_printf(int verbosity, const char *format, ...);
 static int send_request(int socket_fd, const char *user, const char *message, const char *img_url);
