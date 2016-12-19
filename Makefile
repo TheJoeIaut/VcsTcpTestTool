@@ -45,7 +45,7 @@ simple_message_client: $(CLIENT).o
 	$(CC) $(CFLAGS) $(CLIENT).o -o $(CLIENT) $(LDFLAGS) 
 	
 simple_message_server: $(SERVER).o
-	$(CC) $(CFLAGSSERVER) $(SERVER).o -o $(SERVER)	
+	$(CC) $(CFLAGS) $(SERVER).o -o $(SERVER)	
 
 clean:
 	$(RM) *.o *~ $(CLIENT) $(SERVER)
